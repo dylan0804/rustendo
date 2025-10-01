@@ -1,4 +1,11 @@
-use crate::{addressing_mode::AddressingMode, flags::Flags, mem::Mem, opcodes::OPS_CODES_MAP};
+use std::ops::Add;
+
+use crate::{
+    addressing_mode::{self, AddressingMode},
+    flags::Flags,
+    mem::Mem,
+    opcodes::OPS_CODES_MAP,
+};
 
 pub struct CPU {
     pub program_counter: u16, // track the current position
@@ -272,6 +279,27 @@ impl CPU {
         }
     }
 
+    fn asl_accumulator(&mut self) {
+        let carry = (self.register_a >> 7) & 1; // get the carry flag (bit 7)
+        self.register_a <<= 1;
+
+        self.status.set(Flags::CARRY, carry == 1);
+        self.update_zero_and_negative_flag(self.register_a);
+    }
+
+    fn asl(&mut self, addressing_mode: AddressingMode) {
+        let addr = self.get_effective_addr(addressing_mode);
+        let mut value = self.mem_read(addr);
+
+        let carry = (value << 7) & 1;
+        value <<= 1;
+
+        self.status.set(Flags::CARRY, carry == 1);
+
+        self.mem_write(addr, value);
+        self.update_zero_and_negative_flag(value);
+    }
+
     fn add_to_register_a(&mut self, value: u8) {
         let a = self.register_a as u16;
         let carry = if self.status.contains(Flags::CARRY) {
@@ -406,6 +434,44 @@ impl CPU {
                 // SBC
                 0xe9 | 0xe5 | 0xf5 | 0xed | 0xfd | 0xf9 | 0xe1 | 0xf1 => {
                     self.sbc(opscode.addr_mode);
+                }
+                // BCC
+                0x90 => {
+                    self.branch(!self.status.contains(Flags::CARRY));
+                }
+                // BCS {
+                0xb0 => {
+                    self.branch(self.status.contains(Flags::CARRY));
+                }
+                // BEQ
+                0xf0 => {
+                    self.branch(self.status.contains(Flags::ZERO));
+                }
+                // BNE
+                0xd0 => {
+                    self.branch(!self.status.contains(Flags::ZERO));
+                }
+                // BVS
+                0x70 => {
+                    self.branch(self.status.contains(Flags::OVERFLOW));
+                }
+                // BVC
+                0x50 => {
+                    self.branch(!self.status.contains(Flags::OVERFLOW));
+                }
+                // BPL
+                0x10 => {
+                    self.branch(!self.status.contains(Flags::NEGATIVE));
+                }
+                // BMI
+                0x30 => {
+                    self.branch(self.status.contains(Flags::NEGATIVE));
+                }
+                // ASL accumulator
+                0x0a => self.asl_accumulator(),
+                // other ASL
+                0x06 | 0x16 | 0x0e | 0x1e => {
+                    self.asl(opscode.addr_mode);
                 }
                 // TAX
                 0xaa => self.tax(),

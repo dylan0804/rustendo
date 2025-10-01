@@ -141,6 +141,23 @@ lazy_static! {
         OpCode::new(0xe1, "SBC", 2, AddressingMode::Indirect_X),
         OpCode::new(0xf1, "SBC", 2, AddressingMode::Indirect_Y),
 
+        // branching
+        OpCode::new(0xd0, "BNE", 2, AddressingMode::Implied),
+        OpCode::new(0x70, "BVS", 2, AddressingMode::Implied),
+        OpCode::new(0x50, "BVC", 2, AddressingMode::Implied),
+        OpCode::new(0x30, "BMI", 2, AddressingMode::Implied),
+        OpCode::new(0xf0, "BEQ", 2, AddressingMode::Implied),
+        OpCode::new(0xb0, "BCS", 2, AddressingMode::Implied),
+        OpCode::new(0x90, "BCC", 2, AddressingMode::Implied),
+        OpCode::new(0x10, "BPL", 2, AddressingMode::Implied),
+
+        // ASL
+        OpCode::new(0x0a, "ASL", 1, AddressingMode::Implied),
+        OpCode::new(0x06, "ASL", 2, AddressingMode::ZeroPage),
+        OpCode::new(0x16, "ASL", 2, AddressingMode::ZeroPage_X),
+        OpCode::new(0x0e, "ASL", 3, AddressingMode::Absolute),
+        OpCode::new(0x1e, "ASL", 3, AddressingMode::Absolute_X),
+
         // Implied
         OpCode::new(0xaa, "TAX", 1, AddressingMode::Implied),
         OpCode::new(0x8a, "TXA", 1, AddressingMode::Implied),
