@@ -1,5 +1,7 @@
 use std::ops::Add;
 
+use bitflags::Flag;
+
 use crate::{
     addressing_mode::{self, AddressingMode},
     flags::Flags,
@@ -291,10 +293,33 @@ impl CPU {
         let addr = self.get_effective_addr(addressing_mode);
         let mut value = self.mem_read(addr);
 
-        let carry = (value << 7) & 1;
+        // get bit 7
+        let carry = (value >> 7) & 1;
         value <<= 1;
 
         self.status.set(Flags::CARRY, carry == 1);
+
+        self.mem_write(addr, value);
+        self.update_zero_and_negative_flag(value);
+    }
+
+    fn lsr_accumulator(&mut self) {
+        let carry = self.register_a & 0x01;
+
+        self.register_a >>= 1;
+        self.status.set(Flags::CARRY, carry == 1);
+        self.update_zero_and_negative_flag(self.register_a);
+    }
+
+    fn lsr(&mut self, addressing_mode: AddressingMode) {
+        let addr = self.get_effective_addr(addressing_mode);
+        let mut value = self.mem_read(addr);
+
+        // get bit 0
+        let carry = value & 0x01;
+        self.status.set(Flags::CARRY, carry == 1);
+
+        value >>= 1;
 
         self.mem_write(addr, value);
         self.update_zero_and_negative_flag(value);
@@ -330,18 +355,9 @@ impl CPU {
 
     fn update_zero_and_negative_flag(&mut self, value: u8) {
         // turn on the Z bit -> can only be 0 or 1
-        if value == 0 {
-            self.status.insert(Flags::ZERO);
-        } else {
-            self.status.remove(Flags::ZERO);
-        }
-
+        self.status.set(Flags::ZERO, value == 0);
         // turn on the N bit
-        if value & 0b1000_0000 != 0 {
-            self.status.insert(Flags::NEGATIVE);
-        } else {
-            self.status.remove(Flags::NEGATIVE);
-        }
+        self.status.set(Flags::NEGATIVE, (value & 0x80) != 0);
     }
 
     // reads a 16-bit memory in little endian order
