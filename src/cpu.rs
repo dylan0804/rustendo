@@ -1,4 +1,4 @@
-use std::ops::Add;
+use std::ops::{self, Add};
 
 use bitflags::Flag;
 
@@ -325,6 +325,74 @@ impl CPU {
         self.update_zero_and_negative_flag(value);
     }
 
+    fn rol_accumulator(&mut self) {
+        let old_carry = if self.status.contains(Flags::CARRY) {
+            1
+        } else {
+            0
+        };
+
+        let new_carry = (self.register_a >> 7) & 1;
+        self.status.set(Flags::CARRY, new_carry == 1);
+
+        self.register_a <<= 1;
+        self.register_a |= old_carry;
+        self.update_zero_and_negative_flag(self.register_a);
+    }
+
+    fn rol(&mut self, addressing_mode: AddressingMode) {
+        let addr = self.get_effective_addr(addressing_mode);
+        let mut value = self.mem_read(addr);
+
+        let old_carry = if self.status.contains(Flags::CARRY) {
+            1
+        } else {
+            0
+        };
+
+        let new_carry = (value >> 7) & 1;
+        self.status.set(Flags::CARRY, new_carry == 1);
+
+        value <<= 1;
+        value |= old_carry;
+        self.mem_write(addr, value);
+        self.update_zero_and_negative_flag(value);
+    }
+
+    fn ror_accumulator(&mut self) {
+        let old_carry = if self.status.contains(Flags::CARRY) {
+            1
+        } else {
+            0
+        };
+
+        let new_carry = self.register_a & 1;
+        self.status.set(Flags::CARRY, new_carry == 1);
+
+        self.register_a >>= 1;
+        self.register_a |= old_carry << 7;
+        self.update_zero_and_negative_flag(self.register_a);
+    }
+
+    fn ror(&mut self, addressing_mode: AddressingMode) {
+        let addr = self.get_effective_addr(addressing_mode);
+        let mut value = self.mem_read(addr);
+
+        let old_carry = if self.status.contains(Flags::CARRY) {
+            1
+        } else {
+            0
+        };
+
+        let new_carry = value & 1;
+        self.status.set(Flags::CARRY, new_carry == 1);
+
+        value >>= 1;
+        value |= old_carry << 7;
+        self.mem_write(addr, value);
+        self.update_zero_and_negative_flag(value);
+    }
+
     fn add_to_register_a(&mut self, value: u8) {
         let a = self.register_a as u16;
         let carry = if self.status.contains(Flags::CARRY) {
@@ -488,6 +556,18 @@ impl CPU {
                 // other ASL
                 0x06 | 0x16 | 0x0e | 0x1e => {
                     self.asl(opscode.addr_mode);
+                }
+                // ROL accumulator
+                0x2a => self.rol_accumulator(),
+                // other ROL
+                0x26 | 0x36 | 0x2e | 0x3e => {
+                    self.rol(opscode.addr_mode);
+                }
+                // ROR accumulator
+                0x6a => self.ror_accumulator(),
+                // other ROR
+                0x66 | 0x76 | 0x6e | 0x7e => {
+                    self.ror(opscode.addr_mode);
                 }
                 // TAX
                 0xaa => self.tax(),

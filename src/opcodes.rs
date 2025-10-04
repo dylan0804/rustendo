@@ -158,6 +158,20 @@ lazy_static! {
         OpCode::new(0x0e, "ASL", 3, AddressingMode::Absolute),
         OpCode::new(0x1e, "ASL", 3, AddressingMode::Absolute_X),
 
+        // ROL
+        OpCode::new(0x2a, "ROL", 1, AddressingMode::Implied),
+        OpCode::new(0x26, "ROL", 2, AddressingMode::ZeroPage),
+        OpCode::new(0x36, "ROL", 2, AddressingMode::ZeroPage_X),
+        OpCode::new(0x2e, "ROL", 3, AddressingMode::Absolute),
+        OpCode::new(0x3e, "ROL", 3, AddressingMode::Absolute_X),
+
+        // ROR
+        OpCode::new(0x6a, "ROR", 1, AddressingMode::Implied),
+        OpCode::new(0x66, "ROR", 2, AddressingMode::ZeroPage),
+        OpCode::new(0x76, "ROR", 2, AddressingMode::ZeroPage_X),
+        OpCode::new(0x6e, "ROR", 3, AddressingMode::Absolute),
+        OpCode::new(0x7e, "ROR", 3, AddressingMode::Absolute_X),
+
         // Implied
         OpCode::new(0xaa, "TAX", 1, AddressingMode::Implied),
         OpCode::new(0x8a, "TXA", 1, AddressingMode::Implied),
