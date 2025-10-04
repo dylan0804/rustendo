@@ -1,20 +1,14 @@
-use std::ops::{self, Add};
+use crate::{addressing_mode::AddressingMode, flags::Flags, mem::Mem, opcodes::OPS_CODES_MAP};
 
-use bitflags::Flag;
-
-use crate::{
-    addressing_mode::{self, AddressingMode},
-    flags::Flags,
-    mem::Mem,
-    opcodes::OPS_CODES_MAP,
-};
+const STACK
 
 pub struct CPU {
     pub program_counter: u16, // track the current position
     pub register_a: u8,       // accumulator
     pub register_x: u8,
     pub register_y: u8,
-    pub status: Flags,    // C Z I D B V
+    pub status: Flags, // C Z I D B V
+    stack_pointer: u8,
     memory: [u8; 0xFFFF], // 65536
 }
 
@@ -36,6 +30,7 @@ impl CPU {
             register_a: 0,
             register_x: 0,
             register_y: 0,
+            stack_pointer: 0xfd,
             memory: [0; 0xFFFF],
         }
     }
@@ -393,6 +388,69 @@ impl CPU {
         self.update_zero_and_negative_flag(value);
     }
 
+    fn jmp_absolute(&mut self) {
+        let addr = self.mem_read_u16(self.program_counter);
+        self.program_counter = addr;
+    }
+
+    fn jmp_indirect(&mut self) {
+        let addr = self.mem_read_u16(self.program_counter);
+
+        // 6502 has a bug that we have to mimic
+        let indirect_mem = if addr & 0x00FF == 0x00FF {
+            // so the idea is, if the low byte equals to 0xFF, which is at the page boundary,
+            // a carry should be added to the high byte, right? e.g 9 + 7 -> carry = 1
+            // but we don't want that, instead we use the original high byte, hence the bit masking
+            let low = self.mem_read(addr);
+            let high = self.mem_read(addr & 0xFF00); // get original high byte
+            (high as u16) << 8 | low as u16
+        } else {
+            self.mem_read_u16(addr)
+        };
+
+        self.program_counter = indirect_mem;
+    }
+
+    fn jsr(&mut self) {
+        let target_addr = self.mem_read_u16(self.program_counter);
+
+        let return_addr = self.program_counter + 2; // as stated in the 6502 instructions
+
+        let high = (return_addr >> 8) as u8;
+        let low = (return_addr & 0xff) as u8;
+
+        self.stack_push(high);
+        self.stack_push(low);
+
+        self.program_counter = target_addr;
+    }
+
+    fn rts(&mut self) {
+        let low = self.stack_pop();
+        let high = self.stack_pop();
+
+        let return_addr = (high as u16) << 8 | low as u16;
+
+        self.program_counter = return_addr.wrapping_add(1);
+    }
+
+    // the stack in NES works the other way around,
+    // it doesn't start at 0x0100, but instead, it starts at the boundary,
+    // which is 0x0100 + 0xFD => 509. why not 511, you ask? since the reserved spot for this is
+    // from 0x0100 to 0x01FF (256 - 511) because the last 2 spots are already reserved for sth else
+    // weird ik
+    fn stack_push(&mut self, data: u8) {
+        // 0x0100 is the starting point of the stack in the NES CPU memory map
+        self.mem_write(0x0100 + self.stack_pointer as u16, data);
+        self.stack_pointer = self.stack_pointer.wrapping_sub(1);
+    }
+
+    fn stack_pop(&mut self) -> u8 {
+        // the pointer points to the next empty position, so that's why we decrement it first
+        self.stack_pointer = self.stack_pointer.wrapping_add(1);
+        self.mem_read(0x0100 + self.stack_pointer as u16) as u8
+    }
+
     fn add_to_register_a(&mut self, value: u8) {
         let a = self.register_a as u16;
         let carry = if self.status.contains(Flags::CARRY) {
@@ -460,55 +518,44 @@ impl CPU {
 
             let opscode = OPS_CODES_MAP.get(&code).expect("opscode not found");
 
+            // store old program counter to differentiate jumping instructions
+            let old_program_counter = self.program_counter;
+
             match opscode.code {
                 // lda
                 0xa9 | 0xa5 | 0xb5 | 0xad | 0xbd | 0xb9 | 0xa1 | 0xb1 => {
-                    self.lda(opscode.addr_mode);
+                    self.lda(opscode.addr_mode)
                 }
                 // LDY {
-                0xa0 | 0xa4 | 0xb4 | 0xac | 0xbc => {
-                    self.ldy(opscode.addr_mode);
-                }
+                0xa0 | 0xa4 | 0xb4 | 0xac | 0xbc => self.ldy(opscode.addr_mode),
                 // LDX
-                0xa2 | 0xa6 | 0xb6 | 0xae | 0xbe => {
-                    self.ldx(opscode.addr_mode);
-                }
+                0xa2 | 0xa6 | 0xb6 | 0xae | 0xbe => self.ldx(opscode.addr_mode),
                 // STA
-                0x85 | 0x95 | 0x8d | 0x9d | 0x99 | 0x81 | 0x91 => {
-                    self.sta(opscode.addr_mode);
-                }
+                0x85 | 0x95 | 0x8d | 0x9d | 0x99 | 0x81 | 0x91 => self.sta(opscode.addr_mode),
                 // STX
-                0x86 | 0x96 | 0x8e => {
-                    self.stx(opscode.addr_mode);
-                }
+                0x86 | 0x96 | 0x8e => self.stx(opscode.addr_mode),
                 // STY
-                0x84 | 0x94 | 0x8c => {
-                    self.sty(opscode.addr_mode);
-                }
+                0x84 | 0x94 | 0x8c => self.sty(opscode.addr_mode),
                 // AND
                 0x29 | 0x25 | 0x35 | 0x2d | 0x3d | 0x39 | 0x21 | 0x31 => {
-                    self.and(opscode.addr_mode);
+                    self.and(opscode.addr_mode)
                 }
                 // EOR
                 0x49 | 0x45 | 0x55 | 0x4d | 0x5d | 0x59 | 0x41 | 0x51 => {
-                    self.eor(opscode.addr_mode);
+                    self.eor(opscode.addr_mode)
                 }
                 // ORA
                 0x09 | 0x05 | 0x15 | 0x0d | 0x1d | 0x19 | 0x01 | 0x11 => {
-                    self.ora(opscode.addr_mode);
+                    self.ora(opscode.addr_mode)
                 }
                 // BIT
-                0x24 | 0x2c => {
-                    self.bit(opscode.addr_mode);
-                }
+                0x24 | 0x2c => self.bit(opscode.addr_mode),
                 // CMP
                 0xc9 | 0xc5 | 0xd5 | 0xcd | 0xdd | 0xd9 | 0xc1 | 0xd1 => {
                     self.cmp(opscode.addr_mode)
                 }
                 // CPY
-                0xc0 | 0xc4 | 0xcc => {
-                    self.cpy(opscode.addr_mode);
-                }
+                0xc0 | 0xc4 | 0xcc => self.cpy(opscode.addr_mode),
                 // CPX
                 0xe0 | 0xe4 | 0xec => self.cpx(opscode.addr_mode),
                 // ADC
@@ -520,43 +567,25 @@ impl CPU {
                     self.sbc(opscode.addr_mode);
                 }
                 // BCC
-                0x90 => {
-                    self.branch(!self.status.contains(Flags::CARRY));
-                }
-                // BCS {
-                0xb0 => {
-                    self.branch(self.status.contains(Flags::CARRY));
-                }
+                0x90 => self.branch(!self.status.contains(Flags::CARRY)),
+                // BCS
+                0xb0 => self.branch(self.status.contains(Flags::CARRY)),
                 // BEQ
-                0xf0 => {
-                    self.branch(self.status.contains(Flags::ZERO));
-                }
+                0xf0 => self.branch(self.status.contains(Flags::ZERO)),
                 // BNE
-                0xd0 => {
-                    self.branch(!self.status.contains(Flags::ZERO));
-                }
+                0xd0 => self.branch(!self.status.contains(Flags::ZERO)),
                 // BVS
-                0x70 => {
-                    self.branch(self.status.contains(Flags::OVERFLOW));
-                }
+                0x70 => self.branch(self.status.contains(Flags::OVERFLOW)),
                 // BVC
-                0x50 => {
-                    self.branch(!self.status.contains(Flags::OVERFLOW));
-                }
+                0x50 => self.branch(!self.status.contains(Flags::OVERFLOW)),
                 // BPL
-                0x10 => {
-                    self.branch(!self.status.contains(Flags::NEGATIVE));
-                }
+                0x10 => self.branch(!self.status.contains(Flags::NEGATIVE)),
                 // BMI
-                0x30 => {
-                    self.branch(self.status.contains(Flags::NEGATIVE));
-                }
+                0x30 => self.branch(self.status.contains(Flags::NEGATIVE)),
                 // ASL accumulator
                 0x0a => self.asl_accumulator(),
                 // other ASL
-                0x06 | 0x16 | 0x0e | 0x1e => {
-                    self.asl(opscode.addr_mode);
-                }
+                0x06 | 0x16 | 0x0e | 0x1e => self.asl(opscode.addr_mode),
                 // ROL accumulator
                 0x2a => self.rol_accumulator(),
                 // other ROL
@@ -569,6 +598,14 @@ impl CPU {
                 0x66 | 0x76 | 0x6e | 0x7e => {
                     self.ror(opscode.addr_mode);
                 }
+                // JMP absolute
+                0x4c => self.jmp_absolute(),
+                // JMP indirect
+                0x6c => self.jmp_indirect(),
+                // JSR
+                0x20 => self.jsr(),
+                // RTS
+                0x60 => self.rts(),
                 // TAX
                 0xaa => self.tax(),
                 // TXA
@@ -592,7 +629,7 @@ impl CPU {
                 _ => todo!(),
             }
 
-            if opscode.len - 1 >= 1 {
+            if old_program_counter == self.program_counter && opscode.len - 1 >= 1 {
                 self.program_counter += (opscode.len - 1) as u16;
             }
         }

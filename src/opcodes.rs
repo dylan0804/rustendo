@@ -172,6 +172,15 @@ lazy_static! {
         OpCode::new(0x6e, "ROR", 3, AddressingMode::Absolute),
         OpCode::new(0x7e, "ROR", 3, AddressingMode::Absolute_X),
 
+        // JMP
+        OpCode::new(0x4c, "JMP", 3, AddressingMode::Implied),
+        OpCode::new(0x6c, "JMP", 3, AddressingMode::Implied),
+
+        // JSR
+        OpCode::new(0x20, "JSR", 3, AddressingMode::Absolute),
+        // RTS
+        OpCode::new(0x60, "RTS", 1, AddressingMode::Implied),
+
         // Implied
         OpCode::new(0xaa, "TAX", 1, AddressingMode::Implied),
         OpCode::new(0x8a, "TXA", 1, AddressingMode::Implied),
