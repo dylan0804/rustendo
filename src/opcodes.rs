@@ -44,9 +44,9 @@ lazy_static! {
         // LDY
         OpCode::new(0xa0, "LDY", 2, AddressingMode::Immediate),
         OpCode::new(0xa4, "LDY", 2, AddressingMode::ZeroPage),
-        OpCode::new(0xb4, "LDY", 2, AddressingMode::ZeroPage_Y),
+        OpCode::new(0xb4, "LDY", 2, AddressingMode::ZeroPage_X),
         OpCode::new(0xac, "LDY", 3, AddressingMode::Absolute),
-        OpCode::new(0xbc, "LDY", 3, AddressingMode::Absolute_Y),
+        OpCode::new(0xbc, "LDY", 3, AddressingMode::Absolute_X),
 
         // STA
         OpCode::new(0x85, "STA", 2, AddressingMode::ZeroPage),
@@ -64,7 +64,7 @@ lazy_static! {
 
         // STY
         OpCode::new(0x84, "STY", 2, AddressingMode::ZeroPage),
-        OpCode::new(0x94, "STY", 2, AddressingMode::ZeroPage_Y),
+        OpCode::new(0x94, "STY", 2, AddressingMode::ZeroPage_X),
         OpCode::new(0x8c, "STY", 3, AddressingMode::Absolute),
 
         // AND
