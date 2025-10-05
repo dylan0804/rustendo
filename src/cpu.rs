@@ -231,7 +231,8 @@ impl CPU {
             self.status.remove(Flags::CARRY);
         }
 
-        self.update_zero_and_negative_flag(self.register_a.wrapping_sub(1));
+        let result = self.register_a.wrapping_sub(value);
+        self.update_zero_and_negative_flag(result);
     }
 
     fn cpx(&mut self, addressing_mode: AddressingMode) {
@@ -244,7 +245,8 @@ impl CPU {
             self.status.remove(Flags::CARRY);
         }
 
-        self.update_zero_and_negative_flag(self.register_x.wrapping_sub(1));
+        let result = self.register_x.wrapping_sub(value);
+        self.update_zero_and_negative_flag(result);
     }
 
     fn cpy(&mut self, addressing_mode: AddressingMode) {
@@ -257,7 +259,8 @@ impl CPU {
             self.status.remove(Flags::CARRY);
         }
 
-        self.update_zero_and_negative_flag(self.register_y.wrapping_sub(1));
+        let result = self.register_y.wrapping_sub(value);
+        self.update_zero_and_negative_flag(result);
     }
 
     fn adc(&mut self, addressing_mode: AddressingMode) {
@@ -417,9 +420,7 @@ impl CPU {
     }
 
     fn jsr(&mut self) {
-        let target_addr = self.mem_read_u16(self.program_counter);
-
-        let return_addr = self.program_counter + 2; // as stated in the 6502 instructions
+        let return_addr = self.program_counter + 2 - 1; // as stated in the 6502 instructions
 
         let high = (return_addr >> 8) as u8;
         let low = (return_addr & 0xff) as u8;
@@ -427,14 +428,16 @@ impl CPU {
         self.stack_push(high);
         self.stack_push(low);
 
+        let target_addr = self.mem_read_u16(self.program_counter);
+
         self.program_counter = target_addr;
     }
 
     fn rts(&mut self) {
-        let low = self.stack_pop();
-        let high = self.stack_pop();
+        let low = self.stack_pop() as u16;
+        let high = self.stack_pop() as u16;
 
-        let return_addr = (high as u16) << 8 | low as u16;
+        let return_addr = high << 8 | low;
 
         self.program_counter = return_addr.wrapping_add(1);
     }
@@ -504,9 +507,9 @@ impl CPU {
     fn rti(&mut self) {
         self.restore_status_from_stack();
 
-        let low = self.stack_pop();
-        let high = self.stack_pop();
-        self.program_counter = (high << 8) as u16 | low as u16;
+        let low = self.stack_pop() as u16;
+        let high = self.stack_pop() as u16;
+        self.program_counter = high << 8 | low;
     }
 
     fn tsx(&mut self) {
@@ -604,8 +607,6 @@ impl CPU {
         (high << 8) | low
     }
 
-    // game loop looks smth like this
-    //  1. read user input
     pub fn run<F>(&mut self, mut callback: F)
     where
         F: FnMut(&mut CPU),
@@ -667,6 +668,8 @@ impl CPU {
                 0x66 | 0x76 | 0x6e | 0x7e => self.ror(opscode.addr_mode),
                 0xc6 | 0xd6 | 0xce | 0xde => self.dec(opscode.addr_mode),
                 0xe6 | 0xf6 | 0xee | 0xfe => self.inc(opscode.addr_mode),
+                0x4a => self.lsr_accumulator(),
+                0x46 | 0x56 | 0x4e | 0x5e => self.lsr(opscode.addr_mode),
                 0x68 => self.pla(),
                 0x08 => self.php(),
                 0x28 => self.plp(),

@@ -224,6 +224,12 @@ lazy_static! {
         OpCode::new(0xee, "INC", 3, AddressingMode::Absolute),
         OpCode::new(0xfe, "INC", 3, AddressingMode::Absolute_X),
 
+        OpCode::new(0x4a, "LSR", 1, AddressingMode::Implied),
+        OpCode::new(0x46, "LSR", 2, AddressingMode::ZeroPage),
+        OpCode::new(0x56, "LSR", 2, AddressingMode::ZeroPage_X),
+        OpCode::new(0x4e, "LSR", 3, AddressingMode::Absolute),
+        OpCode::new(0x5e, "LSR", 3, AddressingMode::Absolute_X),
+
         // BRK
         OpCode::new(0x00, "BRK", 1, AddressingMode::Implied),
     ];

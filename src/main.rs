@@ -1,13 +1,16 @@
+use rand::Rng;
 use sdl2::pixels::PixelFormatEnum;
 
 use crate::cpu::CPU;
 
 mod addressing_mode;
+mod color;
 mod cpu;
 mod flags;
+mod input;
 mod mem;
 mod opcodes;
-mod input;
+mod screen;
 
 fn main() {
     let sdl_context = sdl2::init().unwrap();
@@ -23,7 +26,10 @@ fn main() {
     canvas.set_scale(10.0, 10.0).unwrap();
 
     let creator = canvas.texture_creator();
-    let mut texture = creator.create_texture_target(PixelFormatEnum::RGB24, 32, 32).unwrap()
+    // Use a streaming texture so we can update pixel data each frame
+    let mut texture = creator
+        .create_texture_target(PixelFormatEnum::RGB24, 32, 32)
+        .unwrap();
 
     let game_code = vec![
         0x20, 0x06, 0x06, 0x20, 0x38, 0x06, 0x20, 0x0d, 0x06, 0x20, 0x2a, 0x06, 0x60, 0xa9, 0x02,
@@ -46,12 +52,27 @@ fn main() {
         0xb0, 0x01, 0x60, 0xe6, 0x11, 0xa9, 0x06, 0xc5, 0x11, 0xf0, 0x0c, 0x60, 0xc6, 0x10, 0xa5,
         0x10, 0x29, 0x1f, 0xc9, 0x1f, 0xf0, 0x01, 0x60, 0x4c, 0x35, 0x07, 0xa0, 0x00, 0xa5, 0xfe,
         0x91, 0x00, 0x60, 0xa6, 0x03, 0xa9, 0x00, 0x81, 0x10, 0xa2, 0x00, 0xa9, 0x01, 0x81, 0x10,
-        0x60, 0xa2, 0x00, 0xea, 0xea, 0xca, 0xd0, 0xfb, 0x60,
+        0x60, 0xa6, 0xff, 0xea, 0xea, 0xca, 0xd0, 0xfb, 0x60,
     ];
 
     let mut cpu = CPU::new();
     cpu.load(&game_code);
     cpu.reset();
 
-    cpu.run(|cpu| todo!());
+    // times 3 bcs each color has 3 components (RGB)
+    let mut frame = [0 as u8; 32 * 32 * 3];
+    let mut rng = rand::rng();
+
+    cpu.run(|cpu| {
+        input::handle_user_input(cpu, &mut event_pump);
+        cpu.mem_write(0xfe, rng.random_range(1..16));
+
+        if screen::should_update_screen(cpu, &mut frame) {
+            texture.update(None, &frame, 32 * 3).unwrap();
+            canvas.copy(&texture, None, None).unwrap();
+            canvas.present();
+        }
+
+        std::thread::sleep(std::time::Duration::new(0, 70_000));
+    });
 }
