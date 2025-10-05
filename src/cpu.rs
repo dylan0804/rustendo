@@ -1,4 +1,11 @@
-use crate::{addressing_mode::AddressingMode, flags::Flags, mem::Mem, opcodes::OPS_CODES_MAP};
+use std::ops;
+
+use crate::{
+    addressing_mode::{self, AddressingMode},
+    flags::Flags,
+    mem::Mem,
+    opcodes::OPS_CODES_MAP,
+};
 
 pub struct CPU {
     pub program_counter: u16, // track the current position
@@ -74,8 +81,8 @@ impl CPU {
         self.memory[addr as usize]
     }
 
-    fn mem_write(&mut self, addr: u16, data: u8) {
-        self.memory[addr as usize] = data;
+    fn mem_write(&mut self, addr: u16, value: u8) {
+        self.memory[addr as usize] = value;
     }
 
     fn reset(&mut self) {
@@ -432,6 +439,94 @@ impl CPU {
         self.program_counter = return_addr.wrapping_add(1);
     }
 
+    fn pha(&mut self) {
+        self.stack_push(self.register_a);
+    }
+
+    fn pla(&mut self) {
+        let value = self.stack_pop();
+        self.register_a = value;
+        self.update_zero_and_negative_flag(self.register_a);
+    }
+
+    fn php(&mut self) {
+        let mut status = self.status.bits();
+        status |= 0b0001_1000; // turn on bit 4 and 5 locally. don't modify the global status flag
+        self.stack_push(status);
+    }
+
+    fn plp(&mut self) {
+        self.restore_status_from_stack();
+    }
+
+    fn clc(&mut self) {
+        self.status.remove(Flags::CARRY);
+    }
+
+    fn sec(&mut self) {
+        self.status.insert(Flags::CARRY);
+    }
+
+    fn cli(&mut self) {
+        self.status.remove(Flags::INTERRUPT_DISABLE);
+    }
+
+    fn sei(&mut self) {
+        self.status.insert(Flags::INTERRUPT_DISABLE);
+    }
+
+    fn clv(&mut self) {
+        self.status.remove(Flags::OVERFLOW);
+    }
+
+    fn cld(&mut self) {
+        self.status.remove(Flags::DECIMAL_MODE);
+    }
+
+    fn sed(&mut self) {
+        self.status.insert(Flags::DECIMAL_MODE);
+    }
+
+    fn dec(&mut self, addressing_mode: AddressingMode) {
+        let addr = self.get_effective_addr(addressing_mode);
+        let value = self.mem_read(addr).wrapping_sub(1);
+        self.mem_write(addr, value);
+        self.update_zero_and_negative_flag(value);
+    }
+
+    fn inc(&mut self, addressing_mode: AddressingMode) {
+        let addr = self.get_effective_addr(addressing_mode);
+        let value = self.mem_read(addr).wrapping_add(1);
+        self.mem_write(addr, value);
+        self.update_zero_and_negative_flag(value);
+    }
+
+    fn rti(&mut self) {
+        self.restore_status_from_stack();
+
+        let low = self.stack_pop();
+        let high = self.stack_pop();
+        self.program_counter = (high << 8) as u16 | low as u16;
+    }
+
+    fn tsx(&mut self) {
+        self.register_x = self.stack_pointer;
+        self.update_zero_and_negative_flag(self.register_x);
+    }
+
+    fn txs(&mut self) {
+        self.stack_pointer = self.register_x;
+    }
+
+    fn restore_status_from_stack(&mut self) {
+        let mut value = self.stack_pop();
+        // make sure bit 5 stays 1
+        value |= 0b0010_0000;
+        // set bit 4 back to 0
+        value &= !0b0001_0000;
+        self.status = Flags::from_bits_truncate(value);
+    }
+
     // the stack in NES works the other way around,
     // it doesn't start at 0x0100, but instead, it starts at the boundary,
     // which is 0x0100 + 0xFD => 509. why not 511, you ask? since the reserved spot for this is
@@ -560,13 +655,22 @@ impl CPU {
                 0x0a => self.asl_accumulator(),
                 0x06 | 0x16 | 0x0e | 0x1e => self.asl(opscode.addr_mode),
                 0x2a => self.rol_accumulator(),
-                0x26 | 0x36 | 0x2e | 0x3e => {
-                    self.rol(opscode.addr_mode);
-                }
+                0x26 | 0x36 | 0x2e | 0x3e => self.rol(opscode.addr_mode),
                 0x6a => self.ror_accumulator(),
-                0x66 | 0x76 | 0x6e | 0x7e => {
-                    self.ror(opscode.addr_mode);
-                }
+                0x66 | 0x76 | 0x6e | 0x7e => self.ror(opscode.addr_mode),
+                0xc6 | 0xd6 | 0xce | 0xde => self.dec(opscode.addr_mode),
+                0xe6 | 0xf6 | 0xee | 0xfe => self.inc(opscode.addr_mode),
+                0x68 => self.pla(),
+                0x08 => self.php(),
+                0x28 => self.plp(),
+                0xd8 => self.cld(),
+                0x58 => self.cli(),
+                0xb8 => self.clv(),
+                0x18 => self.clc(),
+                0x38 => self.sec(),
+                0x78 => self.sei(),
+                0xf8 => self.sed(),
+                0x48 => self.pha(),
                 0x4c => self.jmp_absolute(),
                 0x6c => self.jmp_indirect(),
                 0x20 => self.jsr(),
@@ -579,6 +683,9 @@ impl CPU {
                 0xc8 => self.iny(),
                 0xca => self.dex(),
                 0x88 => self.dey(),
+                0x40 => self.rti(),
+                0xba => self.tsx(),
+                0x9a => self.txs(),
                 0xea => {}
                 0x00 => return,
                 _ => todo!(),
