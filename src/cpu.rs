@@ -1,7 +1,5 @@
 use crate::{addressing_mode::AddressingMode, flags::Flags, mem::Mem, opcodes::OPS_CODES_MAP};
 
-const STACK
-
 pub struct CPU {
     pub program_counter: u16, // track the current position
     pub register_a: u8,       // accumulator
@@ -86,7 +84,7 @@ impl CPU {
         self.register_y = 0;
         self.status = Flags::empty();
 
-        // NES stores the 2 bytes starting memory addr at 0xFFFC. idk why
+        // NES stores the 2 bytes starting memory addr at 0xFFFC
         self.program_counter = self.mem_read_u16(0xFFFC);
     }
 
@@ -522,114 +520,71 @@ impl CPU {
             let old_program_counter = self.program_counter;
 
             match opscode.code {
-                // lda
                 0xa9 | 0xa5 | 0xb5 | 0xad | 0xbd | 0xb9 | 0xa1 | 0xb1 => {
                     self.lda(opscode.addr_mode)
                 }
-                // LDY {
                 0xa0 | 0xa4 | 0xb4 | 0xac | 0xbc => self.ldy(opscode.addr_mode),
-                // LDX
                 0xa2 | 0xa6 | 0xb6 | 0xae | 0xbe => self.ldx(opscode.addr_mode),
-                // STA
                 0x85 | 0x95 | 0x8d | 0x9d | 0x99 | 0x81 | 0x91 => self.sta(opscode.addr_mode),
-                // STX
                 0x86 | 0x96 | 0x8e => self.stx(opscode.addr_mode),
-                // STY
                 0x84 | 0x94 | 0x8c => self.sty(opscode.addr_mode),
-                // AND
                 0x29 | 0x25 | 0x35 | 0x2d | 0x3d | 0x39 | 0x21 | 0x31 => {
                     self.and(opscode.addr_mode)
                 }
-                // EOR
                 0x49 | 0x45 | 0x55 | 0x4d | 0x5d | 0x59 | 0x41 | 0x51 => {
                     self.eor(opscode.addr_mode)
                 }
-                // ORA
                 0x09 | 0x05 | 0x15 | 0x0d | 0x1d | 0x19 | 0x01 | 0x11 => {
                     self.ora(opscode.addr_mode)
                 }
-                // BIT
                 0x24 | 0x2c => self.bit(opscode.addr_mode),
-                // CMP
                 0xc9 | 0xc5 | 0xd5 | 0xcd | 0xdd | 0xd9 | 0xc1 | 0xd1 => {
                     self.cmp(opscode.addr_mode)
                 }
-                // CPY
                 0xc0 | 0xc4 | 0xcc => self.cpy(opscode.addr_mode),
-                // CPX
                 0xe0 | 0xe4 | 0xec => self.cpx(opscode.addr_mode),
-                // ADC
                 0x69 | 0x65 | 0x75 | 0x6d | 0x7d | 0x79 | 0x61 | 0x71 => {
                     self.adc(opscode.addr_mode);
                 }
-                // SBC
                 0xe9 | 0xe5 | 0xf5 | 0xed | 0xfd | 0xf9 | 0xe1 | 0xf1 => {
                     self.sbc(opscode.addr_mode);
                 }
-                // BCC
                 0x90 => self.branch(!self.status.contains(Flags::CARRY)),
-                // BCS
                 0xb0 => self.branch(self.status.contains(Flags::CARRY)),
-                // BEQ
                 0xf0 => self.branch(self.status.contains(Flags::ZERO)),
-                // BNE
                 0xd0 => self.branch(!self.status.contains(Flags::ZERO)),
-                // BVS
                 0x70 => self.branch(self.status.contains(Flags::OVERFLOW)),
-                // BVC
                 0x50 => self.branch(!self.status.contains(Flags::OVERFLOW)),
-                // BPL
                 0x10 => self.branch(!self.status.contains(Flags::NEGATIVE)),
-                // BMI
                 0x30 => self.branch(self.status.contains(Flags::NEGATIVE)),
-                // ASL accumulator
                 0x0a => self.asl_accumulator(),
-                // other ASL
                 0x06 | 0x16 | 0x0e | 0x1e => self.asl(opscode.addr_mode),
-                // ROL accumulator
                 0x2a => self.rol_accumulator(),
-                // other ROL
                 0x26 | 0x36 | 0x2e | 0x3e => {
                     self.rol(opscode.addr_mode);
                 }
-                // ROR accumulator
                 0x6a => self.ror_accumulator(),
-                // other ROR
                 0x66 | 0x76 | 0x6e | 0x7e => {
                     self.ror(opscode.addr_mode);
                 }
-                // JMP absolute
                 0x4c => self.jmp_absolute(),
-                // JMP indirect
                 0x6c => self.jmp_indirect(),
-                // JSR
                 0x20 => self.jsr(),
-                // RTS
                 0x60 => self.rts(),
-                // TAX
                 0xaa => self.tax(),
-                // TXA
                 0x8a => self.txa(),
-                // TAY
                 0xa8 => self.tay(),
-                // TYA
                 0x98 => self.tya(),
-                // INX
                 0xe8 => self.inx(),
-                // INY
                 0xc8 => self.iny(),
-                // DEX
                 0xca => self.dex(),
-                // DEY
                 0x88 => self.dey(),
-                // NOP
                 0xea => {}
-                // BRK
                 0x00 => return,
                 _ => todo!(),
             }
 
-            if old_program_counter == self.program_counter && opscode.len - 1 >= 1 {
+            if old_program_counter == self.program_counter {
                 self.program_counter += (opscode.len - 1) as u16;
             }
         }
