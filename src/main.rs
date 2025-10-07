@@ -4,6 +4,7 @@ use sdl2::pixels::PixelFormatEnum;
 use crate::cpu::CPU;
 
 mod addressing_mode;
+mod bus;
 mod color;
 mod cpu;
 mod flags;
@@ -26,7 +27,6 @@ fn main() {
     canvas.set_scale(10.0, 10.0).unwrap();
 
     let creator = canvas.texture_creator();
-    // Use a streaming texture so we can update pixel data each frame
     let mut texture = creator
         .create_texture_target(PixelFormatEnum::RGB24, 32, 32)
         .unwrap();

@@ -1,29 +1,37 @@
-use std::ops;
-
 use crate::{
     addressing_mode::{self, AddressingMode},
+    bus::Bus,
     flags::Flags,
     mem::Mem,
     opcodes::OPS_CODES_MAP,
 };
 
 pub struct CPU {
-    pub program_counter: u16, // track the current position
-    pub register_a: u8,       // accumulator
-    pub register_x: u8,
-    pub register_y: u8,
-    pub status: Flags, // C Z I D B V
+    program_counter: u16, // track the current position
+    register_a: u8,       // accumulator
+    register_x: u8,
+    register_y: u8,
+    status: Flags, // C Z I D B V
     stack_pointer: u8,
     memory: [u8; 0xFFFF], // 65536
+    bus: Bus,
 }
 
 impl Mem for CPU {
     fn mem_read(&self, addr: u16) -> u8 {
-        self.memory[addr as usize]
+        self.bus.mem_read(addr)
     }
 
     fn mem_write(&mut self, addr: u16, data: u8) {
-        self.memory[addr as usize] = data
+        self.bus.mem_write(addr, data);
+    }
+
+    fn mem_read_u16(&mut self, addr: u16) -> u16 {
+        self.bus.mem_read_u16(addr)
+    }
+
+    fn mem_write_u16(&mut self, addr: u16, data: u16) {
+        self.bus.mem_write_u16(addr, data);
     }
 }
 
@@ -37,6 +45,7 @@ impl CPU {
             register_y: 0,
             stack_pointer: 0xfd,
             memory: [0; 0xFFFF],
+            bus: Bus::new(),
         }
     }
 
@@ -102,12 +111,6 @@ impl CPU {
         self.memory[0x0600..(0x0600 + program.len())].copy_from_slice(&program[..]);
         self.mem_write_u16(0xFFFC, 0x0600);
     }
-
-    // pub fn load_n_run(&mut self, program: &[u8]) {
-    //     self.load(&program);
-    //     self.reset();
-    //     self.run();
-    // }
 
     fn lda(&mut self, addresing_mode: AddressingMode) {
         let addr = self.get_effective_addr(addresing_mode);
