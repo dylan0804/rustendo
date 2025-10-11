@@ -11,6 +11,7 @@ mod flags;
 mod input;
 mod mem;
 mod opcodes;
+mod rom;
 mod screen;
 
 fn main() {

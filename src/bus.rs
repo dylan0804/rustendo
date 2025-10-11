@@ -1,22 +1,39 @@
-use crate::mem::Mem;
+use crate::{mem::Mem, rom::Rom};
 
 const RAM_START: u16 = 0x0000;
 const RAM_MIRROR_END: u16 = 0x1FFF; // 1 decimal less than 0x2000
 const PPU_REGISTERS_START: u16 = 0x2000;
 const PPU_REGISTERS_MIRROR_END: u16 = 0x3FFF;
+const PRG_ROM_START: u16 = 0x8000;
+const PRG_ROM_END: u16 = 0xFFFF;
 
 const RAM_MIRROR_MASK: u16 = 0x07FF; // keep low 11 bits
 const PPU_REG_MASK: u16 = 0x2007;
 
 pub struct Bus {
     cpu_vram: [u8; 2048], // RAM only uses 2KB of space
+    rom: Rom,
 }
 
 impl Bus {
-    pub fn new() -> Self {
+    pub fn new(rom: Rom) -> Self {
         Bus {
             cpu_vram: [0; 2048],
+            rom,
         }
+    }
+
+    // the available space is 32KB but sometimes the PRG ROM's size is only 16 KB
+    // if so and the address is greater than 0x4000, fold it, hence the if check
+    fn read_prg_rom(&self, mut addr: u16) -> u8 {
+        addr -= 0x8000;
+        if self.rom.prg_rom.len() == 0x4000 // 16 KB
+       && addr >= 0x4000
+        {
+            addr %= 0x4000;
+        }
+
+        self.rom.prg_rom[addr as usize]
     }
 }
 
@@ -38,6 +55,7 @@ impl Mem for Bus {
                 let mirrored = addr & PPU_REG_MASK;
                 todo!();
             }
+            PRG_ROM_START..=PRG_ROM_END => self.read_prg_rom(addr),
             _ => 0,
         }
     }
