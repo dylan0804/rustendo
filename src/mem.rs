@@ -7,7 +7,7 @@ pub trait Mem {
     //  LDA $8000 <=> A9 00 80
     //  since NES uses little endian, the CPU will read 0x00 (least significant) first then 0x80 (most significant)
     //  since people write numbers from the most significant part first, we get 0x8000
-    fn mem_read_u16(&mut self, addr: u16) -> u16 {
+    fn mem_read_u16(&self, addr: u16) -> u16 {
         let low = self.mem_read(addr) as u16;
         let high = self.mem_read(addr + 1) as u16;
         (high << 8) | low

@@ -1,7 +1,9 @@
+use std::fs;
+
 use rand::Rng;
 use sdl2::pixels::PixelFormatEnum;
 
-use crate::cpu::CPU;
+use crate::{bus::Bus, cpu::CPU, mem::Mem, rom::Rom, trace::trace};
 
 mod addressing_mode;
 mod bus;
@@ -13,6 +15,7 @@ mod mem;
 mod opcodes;
 mod rom;
 mod screen;
+mod trace;
 
 fn main() {
     let sdl_context = sdl2::init().unwrap();
@@ -56,24 +59,31 @@ fn main() {
         0x60, 0xa6, 0xff, 0xea, 0xea, 0xca, 0xd0, 0xfb, 0x60,
     ];
 
-    let mut cpu = CPU::new();
-    cpu.load(&game_code);
+    let nes_file = fs::read("nestest.nes").unwrap();
+    let rom = Rom::new(&nes_file).unwrap();
+
+    let bus = Bus::new(rom);
+
+    let mut cpu = CPU::new(bus);
+    // cpu.load(&game_code);
     cpu.reset();
+    cpu.program_counter = 0xC000;
 
     // times 3 bcs each color has 3 components (RGB)
     let mut frame = [0 as u8; 32 * 32 * 3];
     let mut rng = rand::rng();
 
     cpu.run(|cpu| {
-        input::handle_user_input(cpu, &mut event_pump);
-        cpu.mem_write(0xfe, rng.random_range(1..16));
-
-        if screen::should_update_screen(cpu, &mut frame) {
-            texture.update(None, &frame, 32 * 3).unwrap();
-            canvas.copy(&texture, None, None).unwrap();
-            canvas.present();
-        }
-
-        std::thread::sleep(std::time::Duration::new(0, 70_000));
+        println!("{}", trace(cpu));
+        // input::handle_user_input(cpu, &mut event_pump);
+        // cpu.mem_write(0xfe, rng.random_range(1..16));
+        //
+        // if screen::should_update_screen(cpu, &mut frame) {
+        //     texture.update(None, &frame, 32 * 3).unwrap();
+        //     canvas.copy(&texture, None, None).unwrap();
+        //     canvas.present();
+        // }
+        //
+        // std::thread::sleep(std::time::Duration::new(0, 70_000));
     });
 }
