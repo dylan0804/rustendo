@@ -1,3 +1,6 @@
+use bitflags::Flag;
+use sdl2::libc::FLUSHO;
+
 use crate::{
     addressing_mode::{self, AddressingMode},
     bus::Bus,
@@ -565,11 +568,70 @@ impl CPU {
             self.status.remove(Flags::CARRY);
         }
 
-        let overflow = (bit_5 != 0) ^ (bit_6 != 0);
-        if overflow {
+        if (bit_5 != 0) ^ (bit_6 != 0) {
             self.status.insert(Flags::OVERFLOW);
         } else {
             self.status.remove(Flags::OVERFLOW);
+        }
+
+        self.update_zero_and_negative_flag(result);
+    }
+
+    fn asr_alr(&mut self, addressing_mode: AddressingMode) {
+        let addr = self.get_operand_addr(addressing_mode);
+        let value = self.mem_read(addr);
+
+        self.register_a &= value;
+        self.lsr_accumulator();
+    }
+
+    fn atx_lxa_oal(&mut self, addressing_mode: AddressingMode) {
+        let addr = self.get_operand_addr(addressing_mode);
+        let value = self.mem_read(addr);
+
+        self.register_a &= value;
+        self.tax();
+    }
+
+    fn axa_sha(&mut self, addressing_mode: AddressingMode) {
+        let addr = self.get_operand_addr(addressing_mode);
+
+        let data = self.register_x & self.register_a & (addr >> 7) as u8;
+        self.mem_write(addr, data);
+    }
+
+    fn axs_sbx_sax(&mut self, addressing_mode: AddressingMode) {
+        let addr = self.get_operand_addr(addressing_mode);
+        let value = self.mem_read(addr);
+
+        let ax = self.register_x & self.register_a;
+        let result = self.register_x.wrapping_sub(value);
+        self.register_x = result;
+
+        // check if a borrow occurs. borrow is the opposite of carry btw
+        // i just found out abt this
+        if ax >= value {
+            self.status.insert(Flags::CARRY);
+        } else {
+            self.status.remove(Flags::CARRY);
+        }
+
+        self.update_zero_and_negative_flag(result);
+    }
+
+    fn dcp_dcm(&mut self, addressing_mode: AddressingMode) {
+        let addr = self.get_operand_addr(addressing_mode);
+        let mut value = self.mem_read(addr);
+
+        value = value.wrapping_sub(1);
+        self.mem_write(addr, value);
+
+        let result = self.register_a.wrapping_sub(value);
+
+        if self.register_a >= value {
+            self.status.insert(Flags::CARRY);
+        } else {
+            self.status.remove(Flags::CARRY);
         }
 
         self.update_zero_and_negative_flag(result);
