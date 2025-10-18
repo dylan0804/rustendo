@@ -1,5 +1,4 @@
-use bitflags::Flag;
-use sdl2::libc::FLUSHO;
+use std::os;
 
 use crate::{
     addressing_mode::{self, AddressingMode},
@@ -297,7 +296,7 @@ impl CPU {
         self.update_zero_and_negative_flag(self.register_a);
     }
 
-    fn asl(&mut self, addressing_mode: AddressingMode) {
+    fn asl(&mut self, addressing_mode: AddressingMode) -> u8 {
         let addr = self.get_operand_addr(addressing_mode);
         let mut value = self.mem_read(addr);
 
@@ -309,6 +308,8 @@ impl CPU {
 
         self.mem_write(addr, value);
         self.update_zero_and_negative_flag(value);
+
+        value
     }
 
     fn lsr_accumulator(&mut self) {
@@ -319,7 +320,7 @@ impl CPU {
         self.update_zero_and_negative_flag(self.register_a);
     }
 
-    fn lsr(&mut self, addressing_mode: AddressingMode) {
+    fn lsr(&mut self, addressing_mode: AddressingMode) -> u8 {
         let addr = self.get_operand_addr(addressing_mode);
         let mut value = self.mem_read(addr);
 
@@ -331,6 +332,8 @@ impl CPU {
 
         self.mem_write(addr, value);
         self.update_zero_and_negative_flag(value);
+
+        value
     }
 
     fn rol_accumulator(&mut self) {
@@ -348,7 +351,7 @@ impl CPU {
         self.update_zero_and_negative_flag(self.register_a);
     }
 
-    fn rol(&mut self, addressing_mode: AddressingMode) {
+    fn rol(&mut self, addressing_mode: AddressingMode) -> u8 {
         let addr = self.get_operand_addr(addressing_mode);
         let mut value = self.mem_read(addr);
 
@@ -365,6 +368,8 @@ impl CPU {
         value |= old_carry;
         self.mem_write(addr, value);
         self.update_zero_and_negative_flag(value);
+
+        value
     }
 
     fn ror_accumulator(&mut self) {
@@ -382,7 +387,7 @@ impl CPU {
         self.update_zero_and_negative_flag(self.register_a);
     }
 
-    fn ror(&mut self, addressing_mode: AddressingMode) {
+    fn ror(&mut self, addressing_mode: AddressingMode) -> u8 {
         let addr = self.get_operand_addr(addressing_mode);
         let mut value = self.mem_read(addr);
 
@@ -399,6 +404,8 @@ impl CPU {
         value |= old_carry << 7;
         self.mem_write(addr, value);
         self.update_zero_and_negative_flag(value);
+
+        value
     }
 
     fn jmp_absolute(&mut self) {
@@ -637,6 +644,88 @@ impl CPU {
         self.update_zero_and_negative_flag(result);
     }
 
+    fn isc_isb_ins(&mut self, addressing_mode: AddressingMode) {
+        self.inc(addressing_mode);
+        self.sbc(addressing_mode);
+    }
+
+    fn lar_lax(&mut self, addressing_mode: AddressingMode) {
+        let addr = self.get_operand_addr(addressing_mode);
+        let value = self.mem_read(addr);
+
+        self.register_a = value;
+        self.update_zero_and_negative_flag(value);
+
+        self.register_x = value;
+    }
+
+    fn rla(&mut self, addressing_mode: AddressingMode) {
+        let data = self.rol(addressing_mode);
+        self.register_a = self.register_a & data;
+        self.update_zero_and_negative_flag(self.register_a);
+    }
+
+    fn rra(&mut self, addressing_mode: AddressingMode) {
+        let data = self.ror(addressing_mode);
+        self.add_to_register_a(data);
+    }
+
+    fn slo_aso(&mut self, addressing_mode: AddressingMode) {
+        let data = self.asl(addressing_mode);
+        self.register_a |= data;
+        self.update_zero_and_negative_flag(self.register_a);
+    }
+
+    fn sre_lse(&mut self, addressing_mode: AddressingMode) {
+        let data = self.lsr(addressing_mode);
+        self.register_a ^= data;
+        self.update_zero_and_negative_flag(self.register_a);
+    }
+
+    fn sxa_shx_xas(&mut self, addressing_mode: AddressingMode) {
+        let addr = self.get_operand_addr(addressing_mode);
+        let result = self.register_x & ((addr >> 8) as u8 + 1);
+        self.mem_write(addr, result);
+    }
+
+    fn sya_shy_say(&mut self, addressing_mode: AddressingMode) {
+        let addr = self.get_operand_addr(addressing_mode);
+        let result = self.register_y & ((addr >> 8) as u8 + 1);
+        self.mem_write(addr, result);
+    }
+
+    fn xaa_ane(&mut self, addressing_mode: AddressingMode) {
+        self.register_a = self.register_x;
+        self.update_zero_and_negative_flag(self.register_a);
+        let addr = self.get_operand_addr(addressing_mode);
+        let value = self.mem_read(addr);
+
+        self.register_a &= value;
+        self.update_zero_and_negative_flag(self.register_a);
+    }
+
+    fn xas_shs_tas(&mut self, addressing_mode: AddressingMode) {
+        let data = self.register_x & self.register_a;
+        self.stack_pointer = data;
+
+        let addr = self.get_operand_addr(addressing_mode);
+        let result = self.stack_pointer & ((addr >> 8) as u8 + 1);
+        self.mem_write(addr, result);
+    }
+
+    fn lar_lae_las(&mut self, addressing_mode: AddressingMode) {
+        let addr = self.get_operand_addr(addressing_mode);
+        let value = self.mem_read(addr);
+
+        let result = self.stack_pointer & value;
+
+        self.register_a = result;
+        self.register_x = result;
+        self.stack_pointer = result;
+
+        self.update_zero_and_negative_flag(result);
+    }
+
     // helper functions
     fn restore_status_from_stack(&mut self) {
         let mut value = self.stack_pop();
@@ -764,10 +853,10 @@ impl CPU {
                 0xc0 | 0xc4 | 0xcc => self.cpy(opscode.addr_mode),
                 0xe0 | 0xe4 | 0xec => self.cpx(opscode.addr_mode),
                 0x69 | 0x65 | 0x75 | 0x6d | 0x7d | 0x79 | 0x61 | 0x71 => {
-                    self.adc(opscode.addr_mode);
+                    self.adc(opscode.addr_mode)
                 }
                 0xe9 | 0xe5 | 0xf5 | 0xed | 0xfd | 0xf9 | 0xe1 | 0xf1 => {
-                    self.sbc(opscode.addr_mode);
+                    self.sbc(opscode.addr_mode)
                 }
                 0x90 => self.branch(!self.status.contains(Flags::CARRY)),
                 0xb0 => self.branch(self.status.contains(Flags::CARRY)),
@@ -778,15 +867,20 @@ impl CPU {
                 0x10 => self.branch(!self.status.contains(Flags::NEGATIVE)),
                 0x30 => self.branch(self.status.contains(Flags::NEGATIVE)),
                 0x0a => self.asl_accumulator(),
-                0x06 | 0x16 | 0x0e | 0x1e => self.asl(opscode.addr_mode),
                 0x2a => self.rol_accumulator(),
-                0x26 | 0x36 | 0x2e | 0x3e => self.rol(opscode.addr_mode),
+                0x26 | 0x36 | 0x2e | 0x3e => {
+                    self.rol(opscode.addr_mode);
+                }
                 0x6a => self.ror_accumulator(),
-                0x66 | 0x76 | 0x6e | 0x7e => self.ror(opscode.addr_mode),
+                0x66 | 0x76 | 0x6e | 0x7e => {
+                    self.ror(opscode.addr_mode);
+                }
                 0xc6 | 0xd6 | 0xce | 0xde => self.dec(opscode.addr_mode),
                 0xe6 | 0xf6 | 0xee | 0xfe => self.inc(opscode.addr_mode),
                 0x4a => self.lsr_accumulator(),
-                0x46 | 0x56 | 0x4e | 0x5e => self.lsr(opscode.addr_mode),
+                0x46 | 0x56 | 0x4e | 0x5e => {
+                    self.lsr(opscode.addr_mode);
+                }
                 0x68 => self.pla(),
                 0x08 => self.php(),
                 0x28 => self.plp(),
@@ -820,6 +914,39 @@ impl CPU {
                 0x0b | 0x2b => {
                     self.aac_anc(opscode.addr_mode);
                 }
+                0xeb => self.sbc(opscode.addr_mode),
+                0xc7 | 0xd7 | 0xCF | 0xdF | 0xdb | 0xd3 | 0xc3 => self.dcp_dcm(opscode.addr_mode),
+                0x27 | 0x37 | 0x2F | 0x3F | 0x3b | 0x33 | 0x23 => self.rla(opscode.addr_mode),
+                0x07 | 0x17 | 0x0F | 0x1f | 0x1b | 0x03 | 0x13 => self.slo_aso(opscode.addr_mode),
+                0x47 | 0x57 | 0x4F | 0x5f | 0x5b | 0x43 | 0x53 => self.sre_lse(opscode.addr_mode),
+                // SKB
+                0x80 | 0x82 | 0x89 | 0xc2 | 0xe2 => {}
+                0xCB => self.axs_sbx_sax(opscode.addr_mode),
+                0x6b => self.arr(opscode.addr_mode),
+                0x4b => self.asr_alr(opscode.addr_mode),
+                0x04 | 0x44 | 0x64 | 0x14 | 0x34 | 0x54 | 0x74 | 0xd4 | 0xf4 | 0x0c | 0x1c
+                | 0x3c | 0x5c | 0x7c | 0xdc | 0xfc => {
+                    let addr = self.get_operand_addr(opscode.addr_mode);
+                    let _data = self.mem_read(addr);
+                    // do nothing
+                }
+                0x67 | 0x77 | 0x6f | 0x7f | 0x7b | 0x63 | 0x73 => self.rra(opscode.addr_mode),
+                0xe7 | 0xf7 | 0xef | 0xff | 0xfb | 0xe3 | 0xf3 => {
+                    self.isc_isb_ins(opscode.addr_mode)
+                }
+                // NOP
+                0x02 | 0x12 | 0x22 | 0x32 | 0x42 | 0x52 | 0x62 | 0x72 | 0x92 | 0xb2 | 0xd2
+                | 0xf2 | 0x1a | 0x3a | 0x5a | 0x7a | 0xda | 0xfa => {}
+
+                0xa7 | 0xb7 | 0xaf | 0xbf | 0xa3 | 0xb3 => self.lar_lax(opscode.addr_mode),
+                0x87 | 0x97 | 0x8f | 0x83 => self.aax_sax_axs(opscode.addr_mode),
+                0xab => self.atx_lxa_oal(opscode.addr_mode),
+                0x8b => self.xaa_ane(opscode.addr_mode),
+                0xbb => self.lar_lae_las(opscode.addr_mode),
+                0x9b => self.xas_shs_tas(opscode.addr_mode),
+                0x93 => self.axa_sha(opscode.addr_mode),
+                0x9e => self.sxa_shx_xas(opscode.addr_mode),
+                0x9c => self.sya_shy_say(opscode.addr_mode),
                 _ => todo!(),
             }
 
